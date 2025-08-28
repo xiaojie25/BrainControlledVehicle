@@ -285,7 +285,6 @@ void ADS1299SendCommand(uint8_t command);
 void ADS1299WriteREG (uint8_t address, uint8_t value);
 uint8_t ADS1299ReadREG (uint8_t address);
 void ADS1299ReadByte(uint8_t *rp);
-uint8_t ADS1299ModeConfig(uint8_t Mode);
 
 #ifdef __cplusplus
 }

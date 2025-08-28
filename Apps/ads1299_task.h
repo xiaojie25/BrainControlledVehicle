@@ -117,7 +117,7 @@ typedef struct ADS1299Configure_{
 #define ADS1299_DATA_LENGTH      				(24u)
 #define ADS1299_TOTAL_LENGTH						(27u)
 
-extern char DataReadly;
+extern char gDataReady;
 extern RingBuffer mADS1299DataRingBuffer;
 
 extern void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);

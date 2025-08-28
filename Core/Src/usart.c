@@ -21,7 +21,8 @@
 #include "usart.h"
 
 /* USER CODE BEGIN 0 */
-
+uint8_t RxFreq[1];
+uint8_t StartFlag = 0;
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart5;
@@ -54,7 +55,7 @@ void MX_UART5_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN UART5_Init 2 */
-
+	HAL_UART_Receive_IT(&huart5, (uint8_t*)RxFreq, 1);
   /* USER CODE END UART5_Init 2 */
 
 }
@@ -334,5 +335,9 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 }
 
 /* USER CODE BEGIN 1 */
-
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	StartFlag = 1;
+	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+}
 /* USER CODE END 1 */

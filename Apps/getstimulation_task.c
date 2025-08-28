@@ -4,24 +4,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "arm_math.h"
-//#include "arm_const_structs.h"
 #include "dip_task.h"
 
-#define STIMULATION_FREQUENCY_FORWARD 7
-#define STIMULATION_FREQUENCY_BACK 9
-#define STIMULATION_FREQUENCY_LEFT 11
-#define STIMULATION_FREQUENCY_RIGHT 13
+#define STIMULATION_FREQUENCY_FORWARD 12
+#define STIMULATION_FREQUENCY_BACK 14
+#define STIMULATION_FREQUENCY_LEFT 16
+#define STIMULATION_FREQUENCY_RIGHT 18
 
-#define STIMULATION_FREQUENCY_FORWARD_INTEX 0
-#define STIMULATION_FREQUENCY_BACK_INTEX 1
-#define STIMULATION_FREQUENCY_LEFT_INTEX 2
-#define STIMULATION_FREQUENCY_RIGHT_INTEX 3
+#define STIMULATION_FREQUENCY_FORWARD_INDEX 0
+#define STIMULATION_FREQUENCY_BACK_INDEX 1
+#define STIMULATION_FREQUENCY_LEFT_INDEX 2
+#define STIMULATION_FREQUENCY_RIGHT_INDEX 3
+#define STIMULATION_FREQUENCY_NULL_INDEX 5
+
+#define FFTMAP(index, offset) TempFFT[mSimulationFrequency[index] + offset]
 
 #define ROWS 256
 #define COLS_X 8
 #define COLS_Y 6
 
-#define LSB 0.0000224
+#define LSB 0.0224
+
+const float UserSNRWeight = 1.5f;
 
 double YForward[COLS_Y][ROWS];
 double YBack[COLS_Y][ROWS];
@@ -29,7 +33,11 @@ double YLeft[COLS_Y][ROWS];
 double YRight[COLS_Y][ROWS];
 char gFFTRes;
 
- 
+uint8_t mSimulationFrequency[4] = {	STIMULATION_FREQUENCY_FORWARD,
+																		STIMULATION_FREQUENCY_BACK,
+																		STIMULATION_FREQUENCY_LEFT,
+																		STIMULATION_FREQUENCY_RIGHT
+																	};
 
 double mSin(double x){
 	double temp = x;
@@ -102,7 +110,7 @@ void CCA(double *X, double *Y, int rows, double *correlation_coefficients){
 	free(C_xy);
 }
 
-void computeCovarianceMatrix(double *signal1, double *signal2, int numSamples, double *covMatrix) {
+void computeCovarianceMatrix(double *signal1, double *signal2, int numSamples, double *covMatrix){
     double mean1 = 0.0, mean2 = 0.0;
 
     // 计算均值
@@ -123,7 +131,7 @@ void computeCovarianceMatrix(double *signal1, double *signal2, int numSamples, d
     *covMatrix = covariance;
 }
 
-double computeCorrelation(double *eegSignal, double refSignals[COLS_Y][ROWS], int numSamples) {
+double computeCorrelation(double *eegSignal, double refSignals[COLS_Y][ROWS], int numSamples){
     double covEEG_Sin, covEEG_Cos, covSin_Sin, covCos_Cos;
 
     // 计算 EEG 和正弦参考信号的协方差
@@ -138,8 +146,6 @@ double computeCorrelation(double *eegSignal, double refSignals[COLS_Y][ROWS], in
     double correlation = (covEEG_Sin * covEEG_Sin / covSin_Sin + covEEG_Cos * covEEG_Cos / covCos_Cos);
     return correlation;
 }
-
-
 
 void CCATaskInit(void){
 	int FS = 250;
@@ -162,12 +168,9 @@ void CCATaskInit(void){
 }
 
 void * CCATaskEntry(void * argument){
-	
 	int Len = RingBufferGetDistanceToBoundary(&mADS1299DataRingBuffer);
-	
 	uint8_t * tail_addr = RingBufferGetTail(&mADS1299DataRingBuffer);
 
-	
 	if(Len < (ADS1299_DATA_LENGTH+2)*ROWS){
 		return NULL;
 	}
@@ -178,26 +181,14 @@ void * CCATaskEntry(void * argument){
 	}
 	
 	int ptr_move = 0;
-	double MaxADS1299CCAData[COLS_X];
 	for(int i = 0; i < ROWS; i++){
 		ptr_move++;
 		for(int j = 0; j < COLS_X; j++){
 			ADS1299CCAData[j][i] = (double)((((*(tail_addr + ptr_move)) << 16)|((*(tail_addr + ptr_move + 1)) << 8)|((*(tail_addr + ptr_move + 2))))/10000.0);
-			//ADS1299CCAData[j][i] = (double)(ADS1299CCAData[i][j]/1000.0);
 			ptr_move += 3;
 		}
 		ptr_move++;
 	}
-//	uint32_t temp = 0;
-//	for(int i=0;i<COLS_X;i++){
-//		arm_max_f32((float *)ADS1299CCAData[i], ROWS, (float *)MaxADS1299CCAData+i,&temp);
-//	}
-//	
-//		for(int i = 0; i < ROWS; i++){
-//		for(int j = 0; j < COLS_X; j++){
-//			ADS1299CCAData[j][i] = ADS1299CCAData[j][i] / MaxADS1299CCAData[j];
-//		}
-//	}
 	
 	double totalCorrelationForward = 0.0;
 	double totalCorrelationBack = 0.0;
@@ -227,6 +218,34 @@ void * CCATaskEntry(void * argument){
 	return NULL;
 }
 
+int FindMaxBySNR(const void * InputFFT, size_t Len, void * MaxSNR){
+	if(InputFFT == NULL || MaxSNR == NULL || Len == 0){
+	return -1;
+	}
+
+	float * TempFFT = (float *)malloc(sizeof(float) * Len);
+//	uint8_t* TempMaxSNR = (uint8_t *)malloc(sizeof(MaxSNR));
+	if(TempFFT == NULL){
+		return -1;
+	}
+	memcpy(TempFFT, InputFFT, sizeof(float) * Len);
+	uint8_t MaxIndex;
+	float MaxAmp = 0;
+	for(int i=0; i<4; i++){
+		/* No consideration of transboundary */
+		if(FFTMAP(i, 0)-0.5f*(FFTMAP(i, 1)+FFTMAP(i, -1))> MaxAmp){
+			MaxAmp = FFTMAP(i, 0)-0.5f*(FFTMAP(i, 1)+FFTMAP(i, -1));
+			MaxIndex = i;
+		}
+	}
+	MaxIndex = FFTMAP(MaxIndex, 0) > UserSNRWeight*0.5f*(FFTMAP(MaxIndex, 1)+FFTMAP(MaxIndex, -1))?
+						 MaxIndex+1:
+	           STIMULATION_FREQUENCY_NULL_INDEX;
+	*(uint8_t *)MaxSNR = MaxIndex;
+	free(TempFFT);
+	return 0;
+}
+
 void * FFTTaskEntry(void * argument){
 	if(gSysMode != SysMode_2){
 		return NULL;
@@ -241,7 +260,6 @@ void * FFTTaskEntry(void * argument){
 	int Len = ROWS * COLS_X * 3;
 	int NowLen = RingBufferGetDistanceToBoundary(&mADS1299DataRingBuffer);
 	
-	
 	if(Len > NowLen){
 		return NULL;
 	}
@@ -250,103 +268,31 @@ void * FFTTaskEntry(void * argument){
 	
 	int ptr_move = 0;
 	for(int j = 0; j < ROWS; j++){
-		//ptr_move++;
 		for(int i = 0; i < COLS_X; i++){//CHANNEL
 			Combined = (Uint8Data[ptr_move] << 16)|(Uint8Data[ptr_move+1] << 8)|Uint8Data[ptr_move+2];
-			if (Combined & 0x800000){ // 检查第23位（符号位）
-        ADS1299CCAData[i][j] = ((int)(Combined | 0xFF000000)); // 扩展符号位
+			if (Combined & 0x800000){ // sign bit
+        ADS1299CCAData[i][j] = ((int)(Combined | 0xFF000000)); // expand sign bit
 			}else{
-        ADS1299CCAData[i][j] =((int) Combined); // 保持原值
+        ADS1299CCAData[i][j] =((int) Combined); // keep on
 			}
-			//ADS1299CCAData[i][j] = (float)((int)((((*(tail_addr + ptr_move)) << 16)|((*(tail_addr + ptr_move + 1)) << 8)|((*(tail_addr + ptr_move + 2)))))/LSB);
-			//ADS1299CCAData[j][i] = (double)(ADS1299CCAData[i][j]/1000.0);
 			ptr_move += 3;
 		}
-		//ptr_move++;
 	}
-	//arm_cmplx_mag_f32
-	float StimulusWeighting[4]={0,0,0,0};
-	float MaxWeighting;
-	uint32_t MaxIntex;
-	for(int j = 0; j<COLS_X;j++){
-		for(int i = 0;i<ROWS;i++){
-			
-			fft_inputbuf[i*2] = ((float)ADS1299CCAData[j][i])*LSB;//mV
-			fft_inputbuf[i*2 + 1] = 0; 
-		}
-		arm_cfft_radix4_instance_f32 scfft;
-		arm_cfft_radix4_init_f32(&scfft, ROWS, 0, 1);
-		arm_cfft_radix4_f32(&scfft,fft_inputbuf);
-		arm_cmplx_mag_f32(fft_inputbuf,fft_outputbuf,ROWS);
-		StimulusWeighting[STIMULATION_FREQUENCY_FORWARD_INTEX] += fft_outputbuf[STIMULATION_FREQUENCY_FORWARD];
-		StimulusWeighting[STIMULATION_FREQUENCY_BACK_INTEX] += fft_outputbuf[STIMULATION_FREQUENCY_BACK];
-		StimulusWeighting[STIMULATION_FREQUENCY_LEFT_INTEX] += fft_outputbuf[STIMULATION_FREQUENCY_LEFT];
-		StimulusWeighting[STIMULATION_FREQUENCY_RIGHT_INTEX] += fft_outputbuf[STIMULATION_FREQUENCY_RIGHT];
+	for(int i = 0;i<ROWS;i++){
+		fft_inputbuf[i*2] = ((float)ADS1299CCAData[0][i])*(float)LSB;//uV
+		fft_inputbuf[i*2 + 1] = 0; 
 	}
-	arm_max_f32(StimulusWeighting, 4, NULL, &MaxIntex);
+	arm_cfft_radix4_instance_f32 scfft;
+	arm_cfft_radix4_init_f32(&scfft, ROWS, 0, 1);
+	arm_cfft_radix4_f32(&scfft,fft_inputbuf);
+	arm_cmplx_mag_f32(fft_inputbuf,fft_outputbuf,ROWS);
 	
-	switch(MaxIntex){
-		case STIMULATION_FREQUENCY_FORWARD_INTEX:{
-			gFFTRes='F';
-			break;
-		}
-		case STIMULATION_FREQUENCY_BACK_INTEX:{
-			gFFTRes='B';
-			break;
-		}
-		case STIMULATION_FREQUENCY_LEFT_INTEX:{
-			gFFTRes='L';
-			break;
-		}
-		case STIMULATION_FREQUENCY_RIGHT_INTEX:{
-			gFFTRes='R';
-			break;
-		}
-	}
+	FindMaxBySNR(fft_outputbuf, sizeof(float)*ROWS, &gFFTRes);
 	
 	mADS1299DataRingBuffer.head_index = 0;
 	mADS1299DataRingBuffer.tail_index = 0;
 	mADS1299DataRingBuffer.is_full = 0;
 	
-
+	return NULL;
 }
-	
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

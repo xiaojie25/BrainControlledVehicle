@@ -27,11 +27,10 @@ int UartTaskInit(){
 }
 
 extern void * UartDataFlushTaskEntry(void * argument){
-	if(gSysMode != SysMode_1){
+	if(gSysMode == SysMode_1 || gSysMode == SysMode_0){
+ 		UartExtFlush(&mDataUartExt);
 		return NULL;
 	}
-	UartExtFlush(&mDataUartExt);
 	return NULL;
 	
-//	return NULL;
 }

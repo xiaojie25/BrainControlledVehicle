@@ -2,6 +2,11 @@
 #define __CCA_TASK_H__
 
 #include <stdint.h>
+#include <stdio.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define ROWS 256
 #define COLS_X 8
@@ -19,5 +24,11 @@ double computeCorrelation(double *eegSignal, double refSignals[COLS_Y][ROWS], in
 void CCATaskInit(void);
 void * CCATaskEntry(void * argument);
 void * FFTTaskEntry(void * argument);
+int FindMaxBySNR(const void * InputFFT, size_t Len, void * MaxSNR);
 
+#ifdef __cplusplus
+}
+#endif
+
+	
 #endif //__CCA_TASK_H__

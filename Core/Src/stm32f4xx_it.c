@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "task_scheduler.h"
+#include "usart.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -285,7 +286,7 @@ void UART5_IRQHandler(void)
   /* USER CODE END UART5_IRQn 0 */
   HAL_UART_IRQHandler(&huart5);
   /* USER CODE BEGIN UART5_IRQn 1 */
-
+	HAL_UART_Receive_IT(&huart5, (uint8_t*)RxFreq, 1);
   /* USER CODE END UART5_IRQn 1 */
 }
 

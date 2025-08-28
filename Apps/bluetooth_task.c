@@ -7,12 +7,12 @@
 
 void BluetoothInit(void){
 	BluetoothPrintf("AT+ORGL\r\n");
-	BluetoothPrintf("AT+PSWD=\"0000\"\r\n");
+	//BluetoothPrintf("AT+PSWD=\"0000\"\r\n");
 	BluetoothPrintf("AT+ROLE=1\r\n");
-	BluetoothPrintf("AT+CMODE=0\r\n");
-	BluetoothPrintf("AT+BIND=9A,B2,BD,FE,E8,77\r\n");
+//	BluetoothPrintf("AT+CMODE=0\r\n");
+//	BluetoothPrintf("AT+BIND=9A,B2,BD,FE,E8,77\r\n");
 	//BluetoothPrintf("AT+BIND=0024,07,00710B\r\n");
-	BluetoothPrintf("AT+BIND?\r\n");
+	//BluetoothPrintf("AT+BIND?\r\n");
 }
 
 int BluetoothPrintf(const char *fmt, ...){
@@ -26,17 +26,16 @@ int BluetoothPrintf(const char *fmt, ...){
 
 int BluetoothVPrintf(const char * fmt, va_list args){
 	int len;
-	char buffer[64];
+	static char buffer[64];
 	len = vsnprintf(buffer, sizeof(buffer), fmt, args);
-	HAL_UART_Transmit_DMA(&huart3, (uint8_t *)fmt, len);
+	HAL_UART_Transmit_DMA(&huart3, (uint8_t *)buffer, 1);
 	return len;
 }
 
 extern void * BluetoothSendEntry(void * argument){
-	if(gSysMode != SysMode_2){
+	if(gSysMode != SysMode_2 && gSysMode != SysMode_3){
 		return NULL;
 	}
-	BluetoothPrintf(&gFFTRes);
-	gFFTRes = 0;
+	BluetoothPrintf("%c", gFFTRes);
 	return NULL;
 }

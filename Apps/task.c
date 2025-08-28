@@ -6,6 +6,7 @@
 #include "ads1299_task.h"
 #include "dip_task.h"
 #include "bluetooth_task.h"
+#include "Frequency_meter_task.h"
 #include "getstimulation_task.h"
 #include "task_scheduler.h"
 #include <stdlib.h>
@@ -18,6 +19,7 @@ Task mDipTask;
 Task mCCATask;
 Task mBuletooth;
 Task mStimulationTask;
+Task mFrequencyMeterTask;
 
 void TaskInit(){
 	//LogInit();
@@ -31,6 +33,7 @@ void TaskInit(){
 	TaskCreate(&mUartTask, MainLoopTask, 50000, 0, 0, UartDataFlushTaskEntry, NULL);
 	TaskCreate(&mCCATask, MainLoopTask, 0, 0, 0, FFTTaskEntry, NULL);
 	TaskCreate(&mBuletooth, MainLoopTask, 0, 0, 0, BluetoothSendEntry, NULL);
-	TaskCreate(&mStimulationTask, MainLoopTask, 10000, 0, 0, StimulationTaskEntry, NULL);
+	TaskCreate(&mStimulationTask, MainLoopTask, 5000, 0, 0, StimulationTaskEntry, NULL);
+	TaskCreate(&mFrequencyMeterTask, MainLoopTask, 0, 0, 0, FrequencyMeterTaskEntry, NULL);
 }
 
